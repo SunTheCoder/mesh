@@ -1,51 +1,124 @@
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from datetime import datetime
-from pathlib import Path
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OffGridPi Hub</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #111;
+      color: #eee;
+      padding: 2rem;
+    }
+    h1 {
+      color: #00ff88;
+    }
+    a {
+      color: #1ecbe1;
+      display: block;
+      margin: 0.5rem 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🌐 OffGridPi Mesh Node</h1>
+  <h2>FREE PALESTINE!!<h2>
+  <p>Welcome to your local node. Here's what's available:</p>
+  <ul>
+    <li><a href="/wiki">📘 Offline Wiki</a></li>
+    <li><a href="/docs/bod1.pdf">Shroom Doc 1</a></li>	
+    <li><a href="/files">📂 File Share</a></li>
+    <li><a href="/chat">💬 Local Chat</a></li>
+    <li><a href="/robot">🤖 Robot Control</a></li>
+  </ul>
+<h2>Personal Journal</h2>
+<form id="journal-form">
+  <textarea name="entry" placeholder="Write something..." rows="6" cols="40"></textarea><br>
+  <button type="submit">Save</button>
+</form>
+<p id="save-status"></p>
 
-app = Flask(__name__)
-CORS(app)
+<script>
+  document.getElementById('journal-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+	
+    const status = document.getElementById('save-status')
 
-@app.route('/')
-def home():
-    return 'MeshNode backend is running.'
+    try {
+      const res = await fetch('http://192.168.4.1:5000/save-journal', {
+        method: 'POST',
+        body: formData
+      });
 
-@app.route('/save-journal', methods=['POST'])
-def save_journal():
-    content = request.form.get('entry', '')
-    if not content.strip():
-        return 'Empty journal entry.', 400
+      const text = await res.text();
 
-    timestamp = datetime.now().isoformat(timespec='minutes').replace(':', '-')
-    save_path = Path.home() / 'pi' / 'meshnode' / 'data' / 'journal'
-    save_path.mkdir(parents=True, exist_ok=True)
-    filename = save_path / f"{timestamp}-log.md"
-    filename.write_text(content.strip())
+      if (res.ok) {
+        status.textContent = "Saved!";
+        form.reset();
+      } else {
+        status.textContent = `Error: ${text}`;
+      }
 
-    return 'Journal entry saved.', 200
+    } catch (err) {
+      console.error(err);
+      status.textContent = "Backend unreachable.";
+    }
+  });
+</script>
 
-@app.route('/get-journal', methods=['GET'])
-def get_journal():
-    journal_path = Path.home() / 'pi' / 'meshnode' / 'data' / 'journal'
-    entries = []
+<h3>Past Entries</h3>
+<ul id="journal-entries"></ul>
 
-    if not journal_path.exists():
-        return jsonify(entries)
+<script src="marked.min.js"></script>
+<script>
+  async function loadJournal() {
+    console.log("loadJournal() triggered");
 
-    for entry_file in sorted(journal_path.glob("*.md")):
-        try:
-            entries.append({
-                'filename': entry_file.name,
-                'content': entry_file.read_text(encoding='utf-8')  # ensures proper character handling
-            })
-        except Exception as e:
-            entries.append({
-                'filename': entry_file.name,
-                'error': str(e)
-            })
+    const list = document.getElementById('journal-entries');
+    list.innerHTML = '';
 
-    return jsonify(entries)
+    try {
+      const res = await fetch('http://192.168.4.1:5000/get-journal');
+      console.log("Fetch response:", res);
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+      const entries = await res.json();
+      console.log("Journal entries loaded:", entries);
 
+      if (!entries.length) {
+        const li = document.createElement('li');
+        li.innerHTML = '<em>No journal entries found.</em>';
+        list.appendChild(li);
+        return;
+      }
+
+      entries.forEach(entry => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <strong>${entry.filename}</strong><br>
+          <pre class="entry-content">${entry.content}</div>
+        `;
+        list.appendChild(li);
+      });
+
+    } catch (err) {
+      console.error('Could not load journal entries:', err);
+      const li = document.createElement('li');
+      li.innerHTML = `<strong>Error:</strong> Could not load journal entries.`;
+      list.appendChild(li);
+    }
+  }
+
+  // Make sure this only runs after DOM is loaded
+  window.addEventListener('DOMContentLoaded', () => {
+    console.log("DOM fully loaded");
+    loadJournal();
+  });
+</script>
+
+
+
+  <p><em>No internet? No problem.</em></p>
+</body>
+</html>
